@@ -17,11 +17,13 @@ namespace Hangfire.Core.Dashboard.Management.Support
         {
             DashboardRequest request = context.Request;
             DashboardResponse response = context.Response;
+            
             if (!"POST".Equals(request.Method, StringComparison.OrdinalIgnoreCase))
             {
                 response.StatusCode = 405;
                 return (Task)Task.FromResult<bool>(false);
             }
+            
             if (this._command(context))
             {
                 response.StatusCode = 200;

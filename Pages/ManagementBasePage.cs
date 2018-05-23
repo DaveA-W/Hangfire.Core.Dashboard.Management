@@ -51,26 +51,31 @@ namespace Hangfire.Core.Dashboard.Management.Pages
                         if (parameterInfo.GetCustomAttributes(true).OfType<DisplayDataAttribute>().Any())
                         {
                             displayInfo = parameterInfo.GetCustomAttribute<DisplayDataAttribute>();
-                            
                         }
                         
                         var myId = $"{id}_{parameterInfo.Name}";
                         if (parameterInfo.ParameterType == typeof(string))
                         {
-                            inputs += InputTextbox(myId, displayInfo?.LabelText??parameterInfo.Name, displayInfo?.PlaceholderText??parameterInfo.Name);
+                            inputs += InputTextbox(myId, displayInfo?.LabelText??parameterInfo.Name, displayInfo?.PlaceholderText??parameterInfo.Name, displayInfo?.DefaultValue?.ToString());
                         }
-                        else if (parameterInfo.ParameterType == typeof(int))
+                        else if (parameterInfo.ParameterType == typeof(int) || parameterInfo.ParameterType == typeof(int?))
                         {
-                            inputs += InputNumberbox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name);
+                            inputs += InputNumberbox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name, displayInfo?.DefaultValue?.ToString());
                         }
-                        else if (parameterInfo.ParameterType == typeof(DateTime))
+                        else if (parameterInfo.ParameterType == typeof(DateTime) || parameterInfo.ParameterType == typeof(DateTime?))
                         {
-                            inputs += InputDatebox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name);
+                            DateTime defaultDate;
+                            if (displayInfo.DefaultValue != null && displayInfo.DefaultValue.ToString().Equals("today", StringComparison.CurrentCultureIgnoreCase))
+                                defaultDate = DateTime.Today;
+                            else
+                                DateTime.TryParse(displayInfo.DefaultValue.ToString(), out defaultDate);
+
+                            inputs += InputDatebox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name, defaultDate.ToString());
                         }
                         else if (parameterInfo.ParameterType == typeof(bool))
                         {
-                            inputs += "<br/>" + InputCheckbox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name);
-                        }
+                            inputs += "<br/>" + InputCheckbox(myId, displayInfo?.LabelText ?? parameterInfo.Name, displayInfo?.PlaceholderText ?? parameterInfo.Name, displayInfo?.DefaultValue?.ToString());
+                        }                        
                         else
                         {
                             throw new NotImplementedException();
@@ -105,12 +110,8 @@ namespace Hangfire.Core.Dashboard.Management.Pages
                 DashboardRoutes.Routes.Add(route, new CommandWithResponseDispatcher(context =>
                 {
                     var par = new List<object>();
-                    var schedule = Task
-                        .Run(() => context.Request.GetFormValuesAsync(
-                            $"{jobMetadata.DisplayName.Replace(" ", string.Empty)}_schedule")).Result.FirstOrDefault();
-                    var cron = Task
-                        .Run(() => context.Request.GetFormValuesAsync(
-                            $"{jobMetadata.DisplayName.Replace(" ", string.Empty)}_cron")).Result.FirstOrDefault();
+                    var schedule = Task.Run(() => context.Request.GetFormValuesAsync($"{jobMetadata.DisplayName.Replace(" ", string.Empty)}_schedule")).Result.FirstOrDefault();
+                    var cron = Task.Run(() => context.Request.GetFormValuesAsync($"{jobMetadata.DisplayName.Replace(" ", string.Empty)}_cron")).Result.FirstOrDefault();
 
                     foreach (var parameterInfo in jobMetadata.MethodInfo.GetParameters())
                     {
@@ -119,16 +120,23 @@ namespace Hangfire.Core.Dashboard.Management.Pages
                         {
                             par.Add(null);
                             continue;
-                        }
-                        ;
+                        };
 
                         var variable = $"{jobMetadata.DisplayName.Replace(" ", string.Empty)}_{parameterInfo.Name}";
-                        if (parameterInfo.ParameterType == typeof(DateTime))
+                        if (parameterInfo.ParameterType == typeof(DateTime) || parameterInfo.ParameterType == typeof(DateTime?))
                         {
                             variable = $"{variable}_datetimepicker";
                         }
 
-                        var t = Task.Run(() => context.Request.GetFormValuesAsync(variable)).Result;
+                        var t = Task.Run(() =>
+                        {
+                            var result = context.Request.GetFormValuesAsync(variable);
+                            if (result.Result.Count > 0)
+                            {
+
+                            }
+                            return result;
+                        }).Result;
 
                         object item = null;
                         var formInput = t.FirstOrDefault();
@@ -136,15 +144,15 @@ namespace Hangfire.Core.Dashboard.Management.Pages
                         {
                             item = formInput;
                         }
-                        else if (parameterInfo.ParameterType == typeof(int))
+                        else if (parameterInfo.ParameterType == typeof(int) || parameterInfo.ParameterType == typeof(int?))
                         {
                             if (formInput != null) item = int.Parse(formInput);
                         }
-                        else if (parameterInfo.ParameterType == typeof(DateTime))
+                        else if (parameterInfo.ParameterType == typeof(DateTime) || parameterInfo.ParameterType == typeof(DateTime?))
                         {
-                            item = formInput == null ? DateTime.MinValue : DateTime.Parse(formInput);
+                            item = formInput == null ? DateTime.Today : DateTime.Parse(formInput);
                         }
-                        else if (parameterInfo.ParameterType == typeof(bool))
+                        else if (parameterInfo.ParameterType == typeof(bool) || parameterInfo.ParameterType == typeof(bool?))
                         {
                             item = formInput == "on";
                         }
@@ -213,7 +221,9 @@ namespace Hangfire.Core.Dashboard.Management.Pages
             Write(pageHeader);
             WriteLiteral("</h1>\r\n");
 
+            //WriteLiteral("<form method=\"POST\">");
             Content();
+            //WriteLiteral("</form>");
 
             WriteLiteral("\r\n</div>\r\n");
             WriteLiteral("\r\n</div>\r\n");
@@ -293,32 +303,32 @@ namespace Hangfire.Core.Dashboard.Management.Pages
                        ";
         }
 
-        private string Input(string id, string labelText, string placeholderText, string inputtype)
+        private string Input(string id, string labelText, string placeholderText, string inputtype, string defaultValue)
         {
             return $@"
                     <div class=""form-group"">
                         <label for=""{id}"" class=""control-label"">{labelText}</label>
-                        <input type=""{inputtype}"" placeholder=""{placeholderText}"" id=""{id}"" >
+                        <input type=""{inputtype}"" placeholder=""{placeholderText}"" id=""{id}"" value=""{defaultValue}"" >
                     </div>
             ";
         }
 
-        protected string InputTextbox(string id, string labelText, string placeholderText)
+        protected string InputTextbox(string id, string labelText, string placeholderText, string defaultValue)
         {
-            return Input(id, labelText, placeholderText, "text");
+            return Input(id, labelText, placeholderText, "text", defaultValue);
         }
-        protected string InputNumberbox(string id, string labelText, string placeholderText)
+        protected string InputNumberbox(string id, string labelText, string placeholderText, string defaultValue)
         {
-            return Input(id, labelText, placeholderText, "number");
+            return Input(id, labelText, placeholderText, "number", defaultValue);
         }
 
-        protected string InputDatebox(string id, string labelText, string placeholderText)
+        protected string InputDatebox(string id, string labelText, string placeholderText, string defaultValue)
         {
             return $@"
                     <div class=""form-group"">
                         <label for=""{id}"" class=""control-label"">{labelText}</label>
                         <div class='input-group date' id='{id}_datetimepicker'>
-                            <input type='text' class=""form-control"" placeholder=""{placeholderText}"" />
+                            <input type='text' class=""form-control"" placeholder=""{placeholderText}"" value=""{defaultValue}"" />
                             <span class=""input-group-addon"">
                                 <span class=""glyphicon glyphicon-calendar""></span>
                             </span>
@@ -327,13 +337,13 @@ namespace Hangfire.Core.Dashboard.Management.Pages
 
         }
 
-        protected string InputCheckbox(string id, string labelText, string placeholderText)
+        protected string InputCheckbox(string id, string labelText, string placeholderText, string defaultValue)
         {
             return $@"
                         <div class=""form-group"">
                             <div class=""checkbox"">
                               <label>
-                                <input type=""checkbox"" id=""{id}"">
+                                <input type=""checkbox"" id=""{id}"" value=""{defaultValue}"">
                                 {labelText}
                               </label>                             
                             </div>

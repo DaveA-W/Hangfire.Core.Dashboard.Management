@@ -7,13 +7,13 @@ namespace Hangfire.Core.Dashboard.Management.Metadata
     {
         public string LabelText { get; set; }
         public string PlaceholderText { get; set; }
+        public object DefaultValue { get; set; }
 
-        public DisplayDataAttribute(string labelText, string placeholderText)
+        public DisplayDataAttribute(string labelText, string placeholderText, object defaultValue = null)
         {
             this.LabelText = labelText;
             this.PlaceholderText = placeholderText;
+            this.DefaultValue = defaultValue;
         }
     }
-
-
 }

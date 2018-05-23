@@ -25,7 +25,10 @@ namespace Hangfire.Core.Dashboard.Management.Support
                 {
                     var attr = ti.GetCustomAttribute<ManagementPageAttribute>();
                     q =  attr.Queue;
-                    Pages.Add(attr);
+                    if (!Pages.Any(p => p.Queue.Equals(q, StringComparison.CurrentCultureIgnoreCase)))
+                    {
+                        Pages.Add(attr);
+                    }
                 }
                 
 
